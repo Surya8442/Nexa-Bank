@@ -1,0 +1,39 @@
+# docker-compose.yml - Orchestrate FastAPI backend with PostgreSQL relational engines
+version: '3.8'
+
+services:
+  # 1. Relational Database Service (PostgreSQL)
+  db:
+    image: postgres:15-alpine
+    container_name: nexabank_db_instance
+    restart: always
+    environment:
+      POSTGRES_USER: nexabank_owner
+      POSTGRES_PASSWORD: Password123
+      POSTGRES_DB: nexabank_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./schema.sql:/docker-entrypoint-initdb.d/schema.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nexabank_owner -d nexabank_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # 2. Python FastAPI Gateway Service
+  web:
+    build: .
+    container_name: nexabank_api_gateway
+    restart: always
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql://nexabank_owner:Password123@db:5432/nexabank_db
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  pgdata:

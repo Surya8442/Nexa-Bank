@@ -1,0 +1,6 @@
+{
+  "name": "NexaBank",
+  "description": "A high-fidelity full-stack digital banking application matching YONO SBI, with OTP-secured login, custom dashboards, accounts summary, quick loans, fund transfers, card management, investment portfolios, and premium customer service portal.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
