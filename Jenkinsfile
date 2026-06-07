@@ -9,7 +9,7 @@ pipeline {
         AWS_REGION = "ap-south-1"
         ECR_REPO = "028282962975.dkr.ecr.ap-south-1.amazonaws.com/nexa"
 
-        SONAR_HOST = "http://sonarqube:9000"
+        SONAR_HOST = "http://localhost:9000"
         NEXUS_URL = "http://nexus-server:8081"
 
         EC2_USER = "ec2-user"
