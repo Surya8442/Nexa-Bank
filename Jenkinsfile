@@ -9,9 +9,6 @@ pipeline {
         AWS_REGION = "ap-south-1"
         ECR_REPO = "028282962975.dkr.ecr.ap-south-1.amazonaws.com/nexa"
 
-        SONAR_HOST = "http://localhost:9000"
-        NEXUS_URL = "http://nexus-server:8081"
-
         EC2_USER = "ec2-user"
         EC2_HOST = "13.206.70.26"
         SSH_KEY = "/var/lib/jenkins/usekey.pem"
@@ -42,7 +39,7 @@ pipeline {
             }
         }
 
-        stage('Build Frontend + Backend') {
+        stage('Build Application') {
             steps {
                 sh 'npm run build'
             }
@@ -51,13 +48,17 @@ pipeline {
         stage('SonarQube Analysis') {
             steps {
                 withSonarQubeEnv('SonarQubeServer') {
-                    sh """
-                    sonar-scanner \
-                    -Dsonar.projectKey=nexabank \
-                    -Dsonar.sources=. \
-                    -Dsonar.host.url=${SONAR_HOST} \
-                    -Dsonar.login=${SONAR_TOKEN}
-                    """
+                    withCredentials([string(credentialsId: 'sonar-cred', variable: 'SONAR_TOKEN')]) {
+                        sh '''
+                        sonar-scanner \
+                          -Dsonar.projectKey=nexa-bank \
+                          -Dsonar.projectName=NexaBank \
+                          -Dsonar.sources=. \
+                          -Dsonar.host.url=http://localhost:9000 \
+                          -Dsonar.login=$SONAR_TOKEN \
+                          -Dsonar.qualitygate.wait=true
+                        '''
+                    }
                 }
             }
         }
@@ -121,6 +122,7 @@ pipeline {
         success {
             echo "🚀 NexaBank Deployment Successful!"
         }
+
         failure {
             echo "❌ Pipeline Failed - Check Logs"
         }
