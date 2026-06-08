@@ -10,16 +10,19 @@
       "DOM.Iterable"
     ],
     "skipLibCheck": true,
+
+    // Vite modern resolution (KEEP HERE)
     "moduleResolution": "bundler",
+
     "isolatedModules": true,
     "moduleDetection": "force",
     "allowJs": true,
     "jsx": "react-jsx",
+
     "paths": {
-      "@/*": [
-        "./*"
-      ]
+      "@/*": ["./*"]
     },
+
     "allowImportingTsExtensions": true,
     "noEmit": true
   }
