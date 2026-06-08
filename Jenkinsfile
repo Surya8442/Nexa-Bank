@@ -22,6 +22,7 @@ pipeline {
         stage('Checkout Code') {
             steps {
                 git branch: 'main',
+                    credentialsId: 'git_cred',
                     url: 'https://github.com/Surya8442/Nexa-Bank.git'
             }
         }
@@ -30,8 +31,6 @@ pipeline {
             steps {
                 sh '''
                 rm -rf node_modules
-                rm -f package-lock.json
-
                 npm cache clean --force
                 npm install
                 '''
@@ -58,8 +57,7 @@ pipeline {
             steps {
                 withSonarQubeEnv('SonarQubeServer') {
                     withCredentials([
-                        string(credentialsId: 'sonar-cred',
-                               variable: 'SONAR_TOKEN')
+                        string(credentialsId: 'sonar-cred', variable: 'SONAR_TOKEN')
                     ]) {
                         sh """
                         ${SONAR_SCANNER} \
@@ -76,7 +74,7 @@ pipeline {
 
         stage('Quality Gate') {
             steps {
-                timeout(time: 5, unit: 'MINUTES') {
+                timeout(time: 10, unit: 'MINUTES') {
                     waitForQualityGate abortPipeline: true
                 }
             }
@@ -96,6 +94,18 @@ pipeline {
                 docker tag ${DOCKER_IMAGE}:${IMAGE_TAG} ${ECR_REPO}:${IMAGE_TAG}
                 docker tag ${DOCKER_IMAGE}:${IMAGE_TAG} ${ECR_REPO}:latest
                 """
+            }
+        }
+
+        stage('AWS Debug') {
+            steps {
+                sh '''
+                echo "===== AWS DEBUG ====="
+                whoami
+                echo "HOME=$HOME"
+                aws --version
+                aws sts get-caller-identity
+                '''
             }
         }
 
@@ -126,6 +136,10 @@ pipeline {
                 ssh -o StrictHostKeyChecking=no \
                 -i ${SSH_KEY} \
                 ${EC2_USER}@${EC2_HOST} '
+
+                docker login \
+                --username AWS \
+                --password-stdin public.ecr.aws <<< \$(aws ecr-public get-login-password --region us-east-1)
 
                 docker pull ${ECR_REPO}:${IMAGE_TAG}
 
