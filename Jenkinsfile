@@ -3,14 +3,16 @@ pipeline {
 
     environment {
         APP_NAME = "nexabank"
+
         DOCKER_IMAGE = "nexabank-app"
         IMAGE_TAG = "${BUILD_NUMBER}"
 
         AWS_REGION = "ap-south-1"
+        ECR_REGION = "us-east-1"
         ECR_REPO = "public.ecr.aws/e9o7j9u4/nexa"
 
         EC2_USER = "ec2-user"
-        EC2_HOST = "http://15.206.72.246"
+        EC2_HOST = "15.206.72.246"
         SSH_KEY = "/var/lib/jenkins/usekey.pem"
 
         SONAR_SCANNER = "/opt/sonar-scanner/bin/sonar-scanner"
@@ -21,39 +23,50 @@ pipeline {
         stage('Checkout Code') {
             steps {
                 git branch: 'main',
-                url: 'https://github.com/Surya8442/Nexa-Bank.git'
+                    url: 'https://github.com/Surya8442/Nexa-Bank.git'
             }
         }
 
         stage('Install Dependencies') {
             steps {
-                sh 'npm install'
+                sh '''
+                npm install
+                '''
             }
         }
 
         stage('Lint Check') {
             steps {
-                sh 'npm run lint || true'
+                sh '''
+                npm run lint || true
+                '''
             }
         }
 
         stage('Build Application') {
             steps {
-                sh 'npm run build'
+                sh '''
+                npm run build
+                '''
             }
         }
 
         stage('SonarQube Analysis') {
             steps {
                 withSonarQubeEnv('SonarQubeServer') {
-                    withCredentials([string(credentialsId: 'sonar-cred', variable: 'SONAR_TOKEN')]) {
+                    withCredentials([
+                        string(
+                            credentialsId: 'sonar-cred',
+                            variable: 'SONAR_TOKEN'
+                        )
+                    ]) {
                         sh """
                         ${SONAR_SCANNER} \
-                          -Dsonar.projectKey=nexa-bank \
-                          -Dsonar.projectName=NexaBank \
-                          -Dsonar.sources=. \
-                          -Dsonar.host.url=http://15.206.72.246:9000 \
-                          -Dsonar.login=$SONAR_TOKEN
+                        -Dsonar.projectKey=nexa-bank \
+                        -Dsonar.projectName=NexaBank \
+                        -Dsonar.sources=. \
+                        -Dsonar.host.url=http://15.206.72.246:9000 \
+                        -Dsonar.login=${SONAR_TOKEN}
                         """
                     }
                 }
@@ -70,51 +83,102 @@ pipeline {
 
         stage('Docker Build') {
             steps {
-                sh "docker build -t ${DOCKER_IMAGE}:${IMAGE_TAG} ."
+                sh """
+                docker build -t ${DOCKER_IMAGE}:${IMAGE_TAG} .
+                """
             }
         }
 
         stage('Docker Tag') {
             steps {
-                sh "docker tag ${DOCKER_IMAGE}:${IMAGE_TAG} ${ECR_REPO}:${IMAGE_TAG}"
+                sh """
+                docker tag ${DOCKER_IMAGE}:${IMAGE_TAG} \
+                ${ECR_REPO}:${IMAGE_TAG}
+
+                docker tag ${DOCKER_IMAGE}:${IMAGE_TAG} \
+                ${ECR_REPO}:latest
+                """
+            }
+        }
+
+        stage('AWS Credentials Check') {
+            steps {
+                sh '''
+                aws sts get-caller-identity
+                '''
             }
         }
 
         stage('AWS ECR Login') {
             steps {
                 sh """
-                aws ecr get-login-password --region ${AWS_REGION} | \
-                docker login --username AWS --password-stdin ${ECR_REPO}
+                aws ecr-public get-login-password \
+                --region ${ECR_REGION} | \
+                docker login \
+                --username AWS \
+                --password-stdin public.ecr.aws
                 """
             }
         }
 
         stage('Push to ECR') {
             steps {
-                sh "docker push ${ECR_REPO}:${IMAGE_TAG}"
+                sh """
+                docker push ${ECR_REPO}:${IMAGE_TAG}
+                docker push ${ECR_REPO}:latest
+                """
             }
         }
 
         stage('Deploy to EC2') {
             steps {
                 sh """
-                ssh -o StrictHostKeyChecking=no -i ${SSH_KEY} ${EC2_USER}@${EC2_HOST} '
-                docker pull ${ECR_REPO}:${IMAGE_TAG} &&
-                docker stop nexabank || true &&
-                docker rm nexabank || true &&
-                docker run -d --name nexabank -p 80:3000 ${ECR_REPO}:${IMAGE_TAG}
+                ssh -o StrictHostKeyChecking=no \
+                -i ${SSH_KEY} \
+                ${EC2_USER}@${EC2_HOST} '
+
+                aws ecr-public get-login-password \
+                --region us-east-1 | \
+                docker login \
+                --username AWS \
+                --password-stdin public.ecr.aws
+
+                docker pull ${ECR_REPO}:${IMAGE_TAG}
+
+                docker stop nexabank || true
+                docker rm nexabank || true
+
+                docker run -d \
+                --restart unless-stopped \
+                --name nexabank \
+                -p 80:3000 \
+                ${ECR_REPO}:${IMAGE_TAG}
                 '
                 """
+            }
+        }
+
+        stage('Cleanup') {
+            steps {
+                sh '''
+                docker image prune -f
+                '''
             }
         }
     }
 
     post {
+
         success {
             echo "🚀 NexaBank Deployment Successful!"
         }
+
         failure {
             echo "❌ Pipeline Failed - Check Logs"
+        }
+
+        always {
+            cleanWs()
         }
     }
 }
