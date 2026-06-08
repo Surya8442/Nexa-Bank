@@ -10,10 +10,6 @@ pipeline {
         ECR_REGION    = "us-east-1"
         ECR_REPO      = "public.ecr.aws/e9o7j9u4/nexa"
 
-        EC2_USER      = "ec2-user"
-        EC2_HOST      = "15.206.72.246"
-        SSH_KEY       = "/var/lib/jenkins/usekey.pem"
-
         SONAR_SCANNER = "/opt/sonar-scanner/bin/sonar-scanner"
     }
 
@@ -31,6 +27,8 @@ pipeline {
             steps {
                 sh '''
                 rm -rf node_modules
+                rm -f package-lock.json
+
                 npm cache clean --force
                 npm install
                 '''
@@ -130,17 +128,9 @@ pipeline {
             }
         }
 
-        stage('Deploy to EC2') {
+        stage('Deploy Application') {
             steps {
                 sh """
-                ssh -o StrictHostKeyChecking=no \
-                -i ${SSH_KEY} \
-                ${EC2_USER}@${EC2_HOST} '
-
-                docker login \
-                --username AWS \
-                --password-stdin public.ecr.aws <<< \$(aws ecr-public get-login-password --region us-east-1)
-
                 docker pull ${ECR_REPO}:${IMAGE_TAG}
 
                 docker stop nexabank || true
@@ -151,7 +141,6 @@ pipeline {
                 --name nexabank \
                 -p 80:3000 \
                 ${ECR_REPO}:${IMAGE_TAG}
-                '
                 """
             }
         }
