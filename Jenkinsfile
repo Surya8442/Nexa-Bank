@@ -7,7 +7,7 @@ pipeline {
         IMAGE_TAG = "${BUILD_NUMBER}"
 
         AWS_REGION = "ap-south-1"
-        ECR_REPO = "028282962975.dkr.ecr.ap-south-1.amazonaws.com/nexa"
+        ECR_REPO = "public.ecr.aws/e9o7j9u4/nexa"
 
         EC2_USER = "ec2-user"
         EC2_HOST = "http://15.206.72.246"
