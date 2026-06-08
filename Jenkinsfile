@@ -52,7 +52,7 @@ pipeline {
                           -Dsonar.projectKey=nexa-bank \
                           -Dsonar.projectName=NexaBank \
                           -Dsonar.sources=. \
-                          -Dsonar.host.url=http://13.206.185.241:9000 \
+                          -Dsonar.host.url=http://http://15.206.72.246:9000 \
                           -Dsonar.login=$SONAR_TOKEN
                         """
                     }
