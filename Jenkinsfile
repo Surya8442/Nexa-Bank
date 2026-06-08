@@ -12,10 +12,8 @@ pipeline {
         EC2_USER = "ec2-user"
         EC2_HOST = "13.206.70.26"
         SSH_KEY = "/var/lib/jenkins/usekey.pem"
-    }
 
-    tools {
-        nodejs "NODEJS_HOME"
+        SONAR_SCANNER = "/opt/sonar-scanner/bin/sonar-scanner"
     }
 
     stages {
@@ -49,15 +47,14 @@ pipeline {
             steps {
                 withSonarQubeEnv('SonarQubeServer') {
                     withCredentials([string(credentialsId: 'sonar-cred', variable: 'SONAR_TOKEN')]) {
-                        sh '''
-                        sonar-scanner \
+                        sh """
+                        ${SONAR_SCANNER} \
                           -Dsonar.projectKey=nexa-bank \
                           -Dsonar.projectName=NexaBank \
                           -Dsonar.sources=. \
-                          -Dsonar.host.url=http://localhost:9000 \
-                          -Dsonar.login=$SONAR_TOKEN \
-                          -Dsonar.qualitygate.wait=true
-                        '''
+                          -Dsonar.host.url=http://13.206.185.241:9000 \
+                          -Dsonar.login=$SONAR_TOKEN
+                        """
                     }
                 }
             }
@@ -73,17 +70,13 @@ pipeline {
 
         stage('Docker Build') {
             steps {
-                sh """
-                docker build -t ${DOCKER_IMAGE}:${IMAGE_TAG} .
-                """
+                sh "docker build -t ${DOCKER_IMAGE}:${IMAGE_TAG} ."
             }
         }
 
         stage('Docker Tag') {
             steps {
-                sh """
-                docker tag ${DOCKER_IMAGE}:${IMAGE_TAG} ${ECR_REPO}:${IMAGE_TAG}
-                """
+                sh "docker tag ${DOCKER_IMAGE}:${IMAGE_TAG} ${ECR_REPO}:${IMAGE_TAG}"
             }
         }
 
@@ -98,9 +91,7 @@ pipeline {
 
         stage('Push to ECR') {
             steps {
-                sh """
-                docker push ${ECR_REPO}:${IMAGE_TAG}
-                """
+                sh "docker push ${ECR_REPO}:${IMAGE_TAG}"
             }
         }
 
@@ -122,7 +113,6 @@ pipeline {
         success {
             echo "🚀 NexaBank Deployment Successful!"
         }
-
         failure {
             echo "❌ Pipeline Failed - Check Logs"
         }
