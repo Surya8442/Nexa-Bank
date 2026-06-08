@@ -10,7 +10,7 @@ pipeline {
         ECR_REPO = "028282962975.dkr.ecr.ap-south-1.amazonaws.com/nexa"
 
         EC2_USER = "ec2-user"
-        EC2_HOST = "13.206.70.26"
+        EC2_HOST = "http://15.206.72.246"
         SSH_KEY = "/var/lib/jenkins/usekey.pem"
 
         SONAR_SCANNER = "/opt/sonar-scanner/bin/sonar-scanner"
