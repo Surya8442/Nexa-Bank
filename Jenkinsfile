@@ -3,16 +3,13 @@ pipeline {
 
     environment {
         APP_NAME      = "nexabank"
-        DOCKER_IMAGE  = "nexabank-app"
         IMAGE_TAG     = "${BUILD_NUMBER}"
 
         AWS_REGION    = "ap-south-1"
-        ECR_REGION    = "us-east-1"
         ECR_REPO      = "public.ecr.aws/e9o7j9u4/nexa"
 
         EC2_USER      = "ec2-user"
-        EC2_HOST      = "15.206.72.246"
-        SSH_KEY       = "/var/lib/jenkins/usekey.pem"
+        EC2_HOST      = "65.0.55.170"
 
         SONAR_SCANNER = "/opt/sonar-scanner/bin/sonar-scanner"
     }
@@ -29,29 +26,26 @@ pipeline {
 
         stage('Install Dependencies') {
             steps {
-                sh '''
-                rm -rf node_modules
-                rm -f package-lock.json
-
-                npm cache clean --force
-                npm install
-                '''
+                sh """
+                npm ci
+                """
             }
         }
 
-        stage('Lint Check') {
+        stage('Lint & Test') {
             steps {
-                sh '''
+                sh """
                 npm run lint || true
-                '''
+                npm test || true
+                """
             }
         }
 
-        stage('Build Application') {
+        stage('Build App') {
             steps {
-                sh '''
+                sh """
                 npm run build
-                '''
+                """
             }
         }
 
@@ -66,7 +60,7 @@ pipeline {
                         -Dsonar.projectKey=nexa-bank \
                         -Dsonar.projectName=NexaBank \
                         -Dsonar.sources=. \
-                        -Dsonar.host.url=http://15.206.72.246:9000 \
+                        -Dsonar.host.url=http://sonarqube:9000 \
                         -Dsonar.login=${SONAR_TOKEN}
                         """
                     }
@@ -85,7 +79,7 @@ pipeline {
         stage('Docker Build') {
             steps {
                 sh """
-                docker build -t ${DOCKER_IMAGE}:${IMAGE_TAG} .
+                docker build -t ${APP_NAME}:${IMAGE_TAG} .
                 """
             }
         }
@@ -93,32 +87,18 @@ pipeline {
         stage('Docker Tag') {
             steps {
                 sh """
-                docker tag ${DOCKER_IMAGE}:${IMAGE_TAG} ${ECR_REPO}:${IMAGE_TAG}
-                docker tag ${DOCKER_IMAGE}:${IMAGE_TAG} ${ECR_REPO}:latest
+                docker tag ${APP_NAME}:${IMAGE_TAG} ${ECR_REPO}:${IMAGE_TAG}
+                docker tag ${APP_NAME}:${IMAGE_TAG} ${ECR_REPO}:latest
                 """
             }
         }
 
-        stage('AWS Debug') {
-            steps {
-                sh '''
-                echo "===== AWS DEBUG ====="
-                whoami
-                echo "HOME=$HOME"
-                aws --version
-                aws sts get-caller-identity
-                '''
-            }
-        }
-
-        stage('AWS ECR Login') {
+        stage('ECR Login') {
             steps {
                 sh """
                 aws ecr-public get-login-password \
-                --region ${ECR_REGION} | \
-                docker login \
-                --username AWS \
-                --password-stdin public.ecr.aws
+                --region ${AWS_REGION} | \
+                docker login --username AWS --password-stdin public.ecr.aws
                 """
             }
         }
@@ -134,34 +114,50 @@ pipeline {
 
         stage('Deploy to EC2') {
             steps {
-                sh """
-                ssh -o StrictHostKeyChecking=no \
-                -i ${SSH_KEY} \
-                ${EC2_USER}@${EC2_HOST} '
+                sshagent(['ec2-ssh-key']) {
+                    sh """
+                    ssh -o StrictHostKeyChecking=no ${EC2_USER}@${EC2_HOST} << 'EOF'
 
-                docker pull ${ECR_REPO}:${IMAGE_TAG}
+                    set -e
 
-                docker stop nexabank || true
-                docker rm nexabank || true
+                    echo "Pulling latest image..."
+                    docker pull ${ECR_REPO}:${IMAGE_TAG}
 
-                docker run -d \
-                --restart unless-stopped \
-                --name nexabank \
-                -p 80:3000 \
-                ${ECR_REPO}:${IMAGE_TAG}
-                '
-                """
+                    echo "Backing up current container..."
+                    docker tag ${ECR_REPO}:latest ${ECR_REPO}:backup || true
+
+                    echo "Stopping old container..."
+                    docker stop nexabank || true
+                    docker rm nexabank || true
+
+                    echo "Starting new container..."
+                    docker run -d \
+                        --name nexabank \
+                        --restart unless-stopped \
+                        -p 3000:3000 \
+                        ${ECR_REPO}:${IMAGE_TAG}
+
+                    echo "Waiting for health check..."
+                    sleep 10
+
+                    curl -f http://localhost:3000 || exit 1
+
+                    echo "Deployment successful"
+
+                    EOF
+                    """
+                }
             }
         }
     }
 
     post {
         success {
-            echo '🚀 NexaBank Deployment Successful!'
+            echo "🚀 Deployment Successful"
         }
 
         failure {
-            echo '❌ Pipeline Failed - Check Logs'
+            echo "❌ Deployment Failed - Check logs"
         }
 
         always {
